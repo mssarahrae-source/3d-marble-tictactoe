@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Marble Tic-Tac-Toe</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; background: #000; color: white; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99; }
+        #menu, #gameui { background: rgba(0,0,0,0.88); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 15px; padding: 25px; max-width: 400px; pointer-events: auto; }
+        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        #gameui { position: absolute; top: 20px; left: 20px; }
+        h1 { margin: 0 0 20px; font-size: 1.8em; }
+        label { display: block; margin: 10px 0; font-weight: bold; }
+        select, button { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; font-size: 16px; background: rgba(255,255,255,0.1); color: white; cursor: pointer; }
+        button { background: #4a90e2; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #357abd; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #turn, #score { font-size: 1.2em; margin: 10px 0; font-weight: bold; }
+        #gameStatus { font-size: 1.4em; margin-top: 10px; }
+        #loadingMsg { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #aaa; font-size: 1.2em; z-index: 200; }
+        .layer-label { position: fixed; z-index: 150; pointer-events: none; font-size: 12px; font-weight: bold; padding: 3px 9px; border-radius: 4px; background: rgba(0,0,0,0.75); border-left: 3px solid; white-space: nowrap; }
+        #legend { position: fixed; bottom: 20px; left: 20px; z-index: 150; pointer-events: none; font-size: 12px; display: none; }
+        #legend div { margin: 3px 0; padding: 3px 8px; border-radius: 4px; background: rgba(0,0,0,0.6); border-left: 3px solid; }
+        @media (max-width: 768px) {
+            #gameui { top: 10px; left: 10px; right: 10px; padding: 20px; }
+            button, select { padding: 10px; font-size: 14px; }
+            h1 { font-size: 1.4em; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingMsg">Loading 3D engine...</div>
+    <div id="canvas-container"></div>
+    <div id="ui">
+        <div id="menu" style="display:none;">
+            <h1>&#127744; 3D Marble Tic-Tac-Toe</h1>
+            <div>
+                <label>Mode:</label>
+                <select id="modeSel">
+                    <option value="2p">2 Players (Hotseat)</option>
+                    <option value="ai">Human vs AI</option>
+                </select>
+            </div>
+            <div>
+                <label>Colors:</label>
+                <select id="colorSel">
+                    <option value="redblue">Red / Blue</option>
+                    <option value="bw">Black / White</option>
+                </select>
+            </div>
+            <div id="aiLevelDiv" style="display:none;">
+                <label>AI Difficulty:</label>
+                <select id="aiLevelSel">
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+            <label style="margin-top:15px;">
+                <input type="checkbox" id="soundToggle" checked> Sound Effects
+            </label>
+            <button id="startBtn" style="margin-top:20px;">&#128640; Start Game</button>
+        </div>
+        <div id="gameui" style="display:none;">
+            <div id="turn">Player 1's Turn</div>
+            <div id="score">P1: 0 | P2: 0</div>
+            <button id="undoBtn">&#8630; Undo</button>
+            <button id="newGameBtn">&#128260; New Game</button>
+            <button id="menuBtn">&#128203; Menu</button>
+            <div id="gameStatus"></div>
+        </div>
+    </div>
+    <div id="legend">
+        <div style="color:#f0a040; border-color:#f0a040;">&#9632; Bottom Level</div>
+        <div style="color:#4090f0; border-color:#4090f0;">&#9632; Middle Level</div>
+        <div style="color:#40e080; border-color:#40e080;">&#9632; Top Level</div>
+    </div>
+    <script src="./three-bundle.js"></script>
+    <script src="./game.js"></script>
+</body>
+</html>

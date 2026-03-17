@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Isometric Marble 3x3x3 Tic-Tac-Toe</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; background: linear-gradient(135deg, #0a0a1a, #000); color: white; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #gameCanvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+        #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99; }
+        #menu, #gameui { background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 15px; padding: 25px; max-width: 400px; pointer-events: auto; }
+        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        #gameui { position: absolute; top: 20px; left: 20px; }
+        h1 { margin: 0 0 20px; font-size: 1.8em; }
+        label { display: block; margin: 10px 0; font-weight: bold; }
+        select, button { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; font-size: 16px; background: rgba(255,255,255,0.1); color: white; cursor: pointer; }
+        button { background: #4a90e2; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #357abd; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #turn, #score { font-size: 1.2em; margin: 10px 0; font-weight: bold; }
+        #gameStatus { font-size: 1.4em; margin-top: 10px; }
+        @media (max-width: 768px) { #gameui { top: 10px; left: 10px; right: 10px; padding: 20px; } button, select { padding: 10px; font-size: 14px; } h1 { font-size: 1.4em; } }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div id="ui">
+        <div id="menu">
+            <h1>🌀 Isometric Marble Tic-Tac-Toe</h1>
+            <div>
+                <label>Mode:</label>
+                <select id="modeSel">
+                    <option value="2p">2 Players (Hotseat)</option>
+                    <option value="ai">Human vs AI</option>
+                </select>
+            </div>
+            <div>
+                <label>Colors:</label>
+                <select id="colorSel">
+                    <option value="redblue">Red / Blue</option>
+                    <option value="bw">Black / White</option>
+                </select>
+            </div>
+            <div id="aiLevelDiv" style="display:none;">
+                <label>AI Difficulty:</label>
+                <select id="aiLevelSel">
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+            <label style="margin-top:15px;"><input type="checkbox" id="soundToggle" checked> Sound Effects</label>
+            <button id="startBtn" style="margin-top:20px;">🚀 Start Game</button>
+        </div>
+        <div id="gameui" style="display:none;">
+            <div id="turn">Player 1's Turn</div>
+            <div id="score">P1: 0 | P2: 0</div>
+            <button id="undoBtn">↶ Undo</button>
+            <button id="newGameBtn">🔄 New Game</button>
+            <button id="menuBtn">📋 Menu</button>
+            <div id="gameStatus"></div>
+        </div>
+    </div>
+    <script>
+        console.log('2D Isometric Marble Tic-Tac-Toe initializing...');
+
+        const game = {
+            canvas: null,
+            ctx: null,
+            board: null,
+            currentPlayer: 1,
+            state: 'menu',
+            mode: '2p',
+            colorset: 'redblue',
+            aiLevel: 'medium',
+            scores: { p1: 0, p2: 0 },
+            moves: [],
+            marbles: [],
+            centers: [],
+            hitCenters: [],
+            drawOrder: [],
+            winningLine: null,
+            winningPlayer: 0,
+            tileSize: 65,
+            centerX: 400,
+            centerY: 300,
+            zoom: 1.0,
+            audioCtx: null,
+            soundEnabled: true,
+            lastTime: 0
+        };
+
+        const winLines = [
+            // Orthogonal 27
+            [[0,0,0],[1,0,0],[2,0,0]], [[0,1,0],[1,1,0],[2,1,0]], [[0,2,0],[1,2,0],[2,2,0]],
+            [[0,0,1],[1,0,1],[2,0,1]], [[0,1,1],[1,1,1],[2,1,1]], [[0,2,1],[1,2,1],[2,2,1]],
+            [[0,0,2],[1,0,2],[2,0,2]], [[0,1,2],[1,1,2],[2,1,2]], [[0,2,2],[1,2,2],[2,2,2]],
+            [[0,0,0],[0,1,0],[0,2,0]], [[1,0,0],[1,1,0],[1,2,0]], [[2,0,0],[2,1,0],[2,2,0]],
+            [[0,0,1],[0,1,1],[0,2,1]], [[1,0,1],[1,1,1],[1,2,1]], [[2,0,1],[2,1,1],[2,2,1]],
+            [[0,0,2],[0,1,2],[0,2,2]], [[1,0,2],[1,1,2],[1,2,2]], [[2,0,2],[2,1,2],[2,2,2]],
+            [[0,0,0],[0,0,1],[0,0,2]], [[0,1,0],[0,1,1],[0,1,2]], [[0,2,0],[0,2,1],[0,2,2]],
+            [[1,0,0],[1,0,1],[1,0,2]], [[1,1,0],[1,1,1],[1,1,2]], [[1,2,0],[1,2,1],[1,2,2]],
+            [[2,0,0],[2,0,1],[2,0,2]], [[2,1,0],[2,1,1],[2,1,2]], [[2,2,0],[2,2,1],[2,2,2]],
+            // Planar diags 18
+            [[0,0,0],[1,1,0],[2,2,0]], [[2,0,0],[1,1,0],[0,2,0]], [[0,0,1],[1,1,1],[2,2,1]], [[2,0,1],[1,1,1],[0,2,1]], [[0,0,2],[1,1,2],[2,2,2]], [[2,0,2],[1,1,2],[0,2,2]],
+            [[0,0,0],[1,1,0],[2,2,0]] wait no dup, wait fixed.
+            // Note: full 18 planar +4 space below
+            [[0,0,0],[1,0,1],[2,0,2]], [[2,0,0],[1,0,1],[0,0,2]], [[0,1,0],[1,1,1],[2,1,2]], [[2,1,0],[1,1,1],[0,1,2]], [[0,2,0],[1,2,1],[2,2,2]], [[2,2,0],[1,2,1],[0,2,2]],
+            [[0,0,0],[0,1,1],[0,2,2]], [[0,2,0],[0,1,1],[0,0,2]], [[1,0,0],[1,1,1],[1,2,2]], [[1,2,0],[1,1,1],[1,0,2]], [[2,0,0],[2,1,1],[2,2,2]], [[2,2,0],[2,1,1],[2,0,2]],
+            // Space 4
+            [[0,0,0],[1,1,1],[2,2,2]], [[0,0,2],[1,1,1],[2,2,0]], [[0,2,0],[1,1,1],[2,0,2]], [[0,2,2],[1,1,1],[2,0,0]]
+        ];
+
+        function init() {
+            game.canvas = document.getElementById('gameCanvas');
+            game.ctx = game.canvas.getContext('2d');
+            game.canvas.width = 800;
+            game.canvas.height = 600;
+            initAudio();
+            computeProjections();
+            loadGameState();
+            setupEventListeners();
+            resizeCanvas();
+            requestAnimationFrame(gameLoop);
+            console.log('Canvas ready');
+        }
+
+        function computeProjections() {
+            game.centers = [];
+            for (let z = 0; z < 3; z++) {
+                for (let y = 0; y < 3; y++) {
+                    for (let x = 0; x < 3; x++) {
+                        const isoX = (x - y * 0.5 + z * 0.25 - 1) * game.tileSize;
+                        const isoY = (y * 0.6 + x * 0.2 + z * 0.8 - 1.5) * game.tileSize * 0.5;
+                        const sx = game.centerX + isoX;
+                        const sy = game.centerY + isoY;
+                        game.centers.push({sx, sy, x, y, z});
+                    }
+                }
+            }
+            game.drawOrder = [...game.centers].sort((a, b) => b.z - a.z || b.sy - a.sy);
+            game.hitCenters = [...game.centers].sort((a, b) => a.z - b.z || a.sy - b.sy);
+        }
+
+        function project(x, y, z) {
+            const c = game.centers.find(c => c.x === x && c.y === y && c.z === z);
+            return c ? {sx: c.sx, sy: c.sy} : {sx: 400, sy: 300};
+        }
+
+        function drawGrid() {
+            game.ctx.strokeStyle = '#6666aa';
+            game.ctx.lineWidth = 3;
+            game.ctx.lineCap = 'round';
+            game.ctx.lineJoin = 'round';
+            game.ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            game.ctx.shadowBlur = 8;
+            // X lines
+            for (let y = 0; y < 3; y++) for (let z = 0; z < 3; z++) {
+                const p0 = project(0, y, z);
+                const p2 = project(2, y, z);
+                game.ctx.beginPath();
+                game.ctx.moveTo(p0.sx, p0.sy);
+                game.ctx.lineTo(p2.sx, p2.sy);
+                game.ctx.stroke();
+            }
+            // Y lines
+            for (let x = 0; x < 3; x++) for (let z = 0; z < 3; z++) {
+                const p0 = project(x, 0, z);
+                const p2 = project(x, 2, z);
+                game.ctx.beginPath();
+                game.ctx.moveTo(p0.sx, p0.sy);
+                game.ctx.lineTo(p2.sx, p2.sy);
+                game.ctx.stroke();
+            }
+            // Z lines
+            for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) {
+                const p0 = project(x, y, 0);
+                const p2 = project(x, y, 2);
+                game.ctx.beginPath();
+                game.ctx.moveTo(p0.sx, p0.sy);
+                game.ctx.lineTo(p2.sx, p2.sy);
+                game.ctx.stroke();
+            }
+            game.ctx.shadowBlur = 0;
+        }
+
+        function drawDots() {
+            game.ctx.strokeStyle = '#aaa';
+            game.ctx.lineWidth = 2;
+            game.ctx.lineCap = 'round';
+            for (let c of game.centers) {
+                if (game.board[c.x][c.y][c.z] === 0) {
+                    game.ctx.beginPath();
+                    game.ctx.arc(c.sx, c.sy, 10, 0, Math.PI * 2);
+                    game.ctx.stroke();
+                }
+            }
+        }
+
+        function getPlayerColor(player) {
+            const sets = {
+                'redblue': ['#ff4444', '#4444ff'],
+                'bw': ['#333333', '#dddddd']
+            };
+            return sets[game.colorset][player - 1];
+        }
+
+        function drawMarble(sx, sy, player, r, pulse = 1) {
+            const col = getPlayerColor(player);
+            // Shadow
+            game.ctx.save();
+            game.ctx.translate(sx + 3, sy + 3);
+            game.ctx.globalAlpha = 0.4;
+            game.ctx.fillStyle = '#000';
+            game.ctx.beginPath();
+            game.ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+            game.ctx.fill();
+            game.ctx.restore();
+            // Glow
+            const gradGlow = game.ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 1.4);
+            gradGlow.addColorStop(0, col + '99');
+            gradGlow.addColorStop(0.6, col + '44');
+            gradGlow.addColorStop(1, col + '00');
+            game.ctx.shadowColor = col;
+            game.ctx.shadowBlur = 15 * pulse;
+            game.ctx.strokeStyle = gradGlow;
+            game.ctx.lineWidth = 6;
+            game.ctx.lineCap = 'round';
+            game.ctx.beginPath();
+            game.ctx.arc(sx, sy, r * 1.1, 0, Math.PI * 2);
+            game.ctx.stroke();
+            game.ctx.shadowBlur = 0;
+            // Marble
+            const grad = game.ctx.createRadialGradient(sx - 6, sy - 6, 0, sx + 5, sy + 5, r);
+            grad.addColorStop(0, col + 'ff');
+            grad.addColorStop(0.4, col + 'dd');
+            grad.addColorStop(0.8, col + '88');
+            grad.addColorStop(1, col + '44');
+            game.ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            game.ctx.shadowBlur = 6;
+            game.ctx.shadowOffsetX = 1;
+            game.ctx.shadowOffsetY = 1;
+            game.ctx.fillStyle = grad;
+            game.ctx.beginPath();
+            game.ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            game.ctx.fill();
+            game.ctx.shadowBlur = 0;
+            game.ctx.globalAlpha = 1;
+        }
+
+        function drawWinLine() {
+            if (!game.winningLine) return;
+            const col = getPlayerColor(game.winningPlayer);
+            const p1 = project(game.winningLine[0][0], game.winningLine[0][1], game.winningLine[0][2]);
+            const p2 = project(game.winningLine[1][0], game.winningLine[1][1], game.winningLine[1][2]);
+            const p3 = project(game.winningLine[2][0], game.winningLine[2][1], game.winningLine[2][2]);
+            const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.3;
+            game.ctx.save();
+            game.ctx.shadowColor = col;
+            game.ctx.shadowBlur = 20 * pulse;
+            game.ctx.lineCap = 'round';
+            game.ctx.lineJoin = 'round';
+            // Outer glow
+            game.ctx.strokeStyle = col + '66';
+            game.ctx.lineWidth = 16;
+            game.ctx.beginPath();
+            game.ctx.moveTo(p1.sx, p1.sy);
+            game.ctx.lineTo(p2.sx, p2.sy);
+            game.ctx.lineTo(p3.sx, p3.sy);
+            game.ctx.stroke();
+            // Inner
+            game.ctx.strokeStyle = col + 'ff';
+            game.ctx.lineWidth = 8;
+            game.ctx.shadowBlur = 10;
+            game.ctx.beginPath();
+            game.ctx.moveTo(p1.sx, p1.sy);
+            game.ctx.lineTo(p2.sx, p2.sy);
+            game.ctx.lineTo(p3.sx, p3.sy);
+            game.ctx.stroke();
+            game.ctx.restore();
+        }
+
+        function draw() {
+            game.ctx.fillStyle = '#0a0a1a';
+            game.ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
+            game.ctx.save();
+            game.ctx.scale(game.zoom, game.zoom);
+            drawGrid();
+            drawDots();
+            // Marbles
+            game.marbles.forEach(m => {
+                const progress = Math.min(1, m.progress + 0.02);
+                m.progress = progress;
+                const sy = m.baseSy + (1 - progress) * -35;
+                const pulse = (game.state === 'win' && game.board[m.x][m.y][m.z] === game.winningPlayer) ? (1 + Math.sin(Date.now() * 0.01) * 0.4) : 1;
+                drawMarble(m.baseSx, sy, m.player, 18 * progress, pulse);
+            });
+            drawWinLine();
+            game.ctx.restore();
+        }
+
+        function gameLoop(time) {
+            requestAnimationFrame(gameLoop);
+            draw();
+        }
+
+        // Game logic same as 3D
+        function initBoard() {
+            game.board = Array.from({length: 3}, () => Array.from({length: 3}, () => [0, 0, 0]));
+            game.moves = [];
+            game.marbles = [];
+            game.currentPlayer = 1;
+            game.state = 'playing';
+            game.winningLine = null;
+            game.winningPlayer = 0;
+        }
+
+        function placeMarble(x, y, z, player) {
+            game.board[x][y][z] = player;
+            const center = game.centers.find(c => c.x === x && c.y === y && c.z === z);
+            game.marbles.push({baseSx: center.sx, baseSy: center.sy, x, y, z, player, progress: 0});
+            game.moves.push({x, y, z, player});
+            playTone(player === 1 ? 523 : 392);
+            game.currentPlayer = 3 - player;
+        }
+
+        function checkWin(board, player) {
+            for (let line of winLines) {
+                const [p1, p2, p3] = line;
+                if (board[p1[0]][p1[1]][p1[2]] === player &&
+                    board[p2[0]][p2[1]][p2[2]] === player &&
+                    board[p3[0]][p3[1]][p3[2]] === player) {
+                    return line;
+                }
+            }
+            return null;
+        }
+
+        function isFull(board) {
+            for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) for (let z = 0; z < 3; z++) {
+                if (board[x][y][z] === 0) return false;
+            }
+            return true;
+        }
+
+        function checkGameState() {
+            const line1 = checkWin(game.board, 1);
+            if (line1) {
+                game.state = 'win';
+                game.winningLine = line1;
+                game.winningPlayer = 1;
+                game.scores.p1++;
+                document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 1 Wins! 🎉</div>';
+                playTone(659, 0.4);
+                updateScores();
+                saveSettings();
+                return true;
+            }
+            const line2 = checkWin(game.board, 2);
+            if (line2) {
+                game.state = 'win';
+                game.winningLine = line2;
+                game.winningPlayer = 2;
+                game.scores.p2++;
+                document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 2 Wins! 🎉</div>';
+                playTone(659, 0.4);
+                updateScores();
+                saveSettings();
+                return true;
+            }
+            if (isFull(game.board)) {
+                game.state = 'draw';
+                document.getElementById('gameStatus').innerHTML = '<div style="color:#aaa;">It\'s a Draw! 🤝</div>';
+                return true;
+            }
+            updateTurnDisplay();
+            if (game.mode === 'ai' && game.currentPlayer === 2 && game.state === 'playing') {
+                setTimeout(aiTurn, 800 + Math.random() * 400);
+            }
+            return false;
+        }
+
+        // AI logic same
+        function cloneBoard(b) {
+            return b.map(l => l.map(r => [...r]));
+        }
+
+        function minimax(b, depth, alpha, beta, maximizing, aiPlayer) {
+            if (depth === 0) return 0;
+            const line1 = checkWin(b, 1);
+            if (line1) return - (1000 - depth * 10);
+            const line2 = checkWin(b, 2);
+            if (line2) return 1000 - depth * 10;
+            if (isFull(b)) return 0;
+            if (maximizing) {
+                let maxEval = -Infinity;
+                for (let x=0; x<3; x++) for (let y=0; y<3; y++) for (let z=0; z<3; z++) {
+                    if (b[x][y][z] === 0) {
+                        b[x][y][z] = aiPlayer;
+                        let eval = minimax(b, depth - 1, alpha, beta, false, aiPlayer);
+                        b[x][y][z] = 0;
+                        maxEval = Math.max(maxEval, eval);
+                        alpha = Math.max(alpha, maxEval);
+                        if (beta <= alpha) return maxEval;
+                    }
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let x=0; x<3; x++) for (let y=0; y<3; y++) for (let z=0; z<3; z++) {
+                    if (b[x][y][z] === 0) {
+                        b[x][y][z] = 3 - aiPlayer;
+                        let eval = minimax(b, depth - 1, alpha, beta, true, aiPlayer);
+                        b[x][y][z] = 0;
+                        minEval = Math.min(minEval, eval);
+                        beta = Math.min(beta, minEval);
+                        if (beta <= alpha) return minEval;
+                    }
+                }
+                return minEval;
+            }
+        }
+
+        function getBestMove(boardCopy, aiPlayer, depth) {
+            let bestScore = -Infinity;
+            let move = null;
+            for (let x=0; x<3; x++) for (let y=0; y<3; y++) for (let z=0; z<3; z++) {
+                if (boardCopy[x][y][z] === 0) {
+                    boardCopy[x][y][z] = aiPlayer;
+                    let score = minimax(boardCopy, depth - 1, -Infinity, Infinity, false, aiPlayer);
+                    boardCopy[x][y][z] = 0;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = {x, y, z};
+                    }
+                }
+            }
+            return move;
+        }
+
+        function aiTurn() {
+            let move;
+            const depths = { easy: 3, medium: 5, hard: 7 };
+            const depth = depths[game.aiLevel];
+            if (game.aiLevel === 'easy' && Math.random() < 0.5) {
+                const empties = [];
+                for (let x=0; x<3; x++) for (let y=0; y<3; y++) for (let z=0; z<3; z++) {
+                    if (game.board[x][y][z] === 0) empties.push({x,y,z});
+                }
+                move = empties[Math.floor(Math.random() * empties.length)];
+            } else {
+                move = getBestMove(cloneBoard(game.board), 2, depth);
+            }
+            if (move) {
+                placeMarble(move.x, move.y, move.z, 2);
+                checkGameState();
+            }
+        }
+
+        function initAudio() {
+            game.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playTone(freq, duration = 0.15) {
+            if (!game.soundEnabled || !game.audioCtx) return;
+            const osc = game.audioCtx.createOscillator();
+            const gain = game.audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(game.audioCtx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, game.audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, game.audioCtx.currentTime + duration);
+            osc.start(game.audioCtx.currentTime);
+            osc.stop(game.audioCtx.currentTime + duration);
+        }
+
+        // UI functions same
+        function startNewGame() {
+            console.log('Start game clicked');
+            game.audioCtx?.resume();
+            game.mode = document.getElementById('modeSel').value;
+            game.colorset = document.getElementById('colorSel').value;
+            game.aiLevel = document.getElementById('aiLevelSel').value;
+            game.soundEnabled = document.getElementById('soundToggle').checked;
+            saveSettings();
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('gameui').style.display = 'block';
+            resetToNewGame();
+        }
+
+        function performUndo() {
+            if (game.moves.length === 0 || game.state !== 'playing') return;
+            const last = game.moves.pop();
+            game.board[last.x][last.y][last.z] = 0;
+            game.marbles.pop();
+            game.currentPlayer = last.player;
+            document.getElementById('gameStatus').innerHTML = '';
+            game.state = 'playing';
+            updateTurnDisplay();
+        }
+
+        function resetToNewGame() {
+            game.marbles = [];
+            initBoard();
+            document.getElementById('gameStatus').innerHTML = '';
+            updateTurnDisplay();
+        }
+
+        function showMainMenu() {
+            document.getElementById('menu').style.display = 'block';
+            document.getElementById('gameui').style.display = 'none';
+        }
+
+        function loadGameState() {
+            const settings = localStorage.getItem('marbleTttSettings2d') || localStorage.getItem('marbleTttSettings');
+            if (settings) {
+                const s = JSON.parse(settings);
+                game.mode = s.mode || '2p';
+                game.colorset = s.colorset || 'redblue';
+                game.aiLevel = s.aiLevel || 'medium';
+                game.soundEnabled = s.sound !== false;
+            }
+            const sc = localStorage.getItem('marbleTttScores') || localStorage.getItem('marbleTttScores2d');
+            if (sc) game.scores = JSON.parse(sc);
+            document.getElementById('modeSel').value = game.mode;
+            document.getElementById('colorSel').value = game.colorset;
+            document.getElementById('aiLevelSel').value = game.aiLevel;
+            document.getElementById('soundToggle').checked = game.soundEnabled;
+            updateScores();
+            document.getElementById('aiLevelDiv').style.display = game.mode === 'ai' ? 'block' : 'none';
+        }
+
+        function saveSettings() {
+            localStorage.setItem('marbleTttSettings2d', JSON.stringify({
+                mode: game.mode, colorset: game.colorset, aiLevel: game.aiLevel, sound: game.soundEnabled
+            }));
+            localStorage.setItem('marbleTttScores2d', JSON.stringify(game.scores));
+        }
+
+        function updateTurnDisplay() {
+            document.getElementById('turn').textContent = `Player ${game.currentPlayer}'s Turn`;
+        }
+
+        function updateScores() {
+            document.getElementById('score').textContent = `P1: ${game.scores.p1} | P2: ${game.scores.p2}`;
+        }
+
+        function getLogicalMouse(e) {
+            const rect = game.canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) * (game.canvas.width / rect.width) / game.zoom,
+                y: (e.clientY - rect.top) * (game.canvas.height / rect.height) / game.zoom
+            };
+        }
+
+        function onPointerDown(e) {
+            e.preventDefault();
+            if (game.state !== 'playing' || (game.mode === 'ai' && game.currentPlayer === 2)) return;
+            const pos = getLogicalMouse(e);
+            let selected = null;
+            let minDist = 25;
+            for (let center of game.hitCenters) {
+                if (game.board[center.x][center.y][center.z] !== 0) continue;
+                const dx = pos.x - center.sx;
+                const dy = pos.y - center.sy;
+                const dist = Math.hypot(dx, dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    selected = center;
+                }
+            }
+            if (selected) {
+                placeMarble(selected.x, selected.y, selected.z, game.currentPlayer);
+                if (!checkGameState()) {
+                    updateTurnDisplay();
+                }
+            }
+        }
+
+        function onWheel(e) {
+            e.preventDefault();
+            const delta = e.deltaY * -0.001;
+            game.zoom += delta;
+            game.zoom = Math.max(0.5, Math.min(3, game.zoom));
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const rect = container.getBoundingClientRect();
+            game.canvas.width = 800;
+            game.canvas.height = 600;
+            game.centerX = 400;
+            game.centerY = 300;
+            computeProjections();
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', resizeCanvas);
+            game.canvas.addEventListener('pointerdown', onPointerDown, {passive: false});
+            game.canvas.addEventListener('wheel', onWheel, {passive: false});
+            document.getElementById('modeSel').addEventListener('change', (e) => {
+                document.getElementById('aiLevelDiv').style.display = e.target.value === 'ai' ? 'block' : 'none';
+            });
+            document.getElementById('startBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); startNewGame(); }, {passive: false});
+            document.getElementById('undoBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); performUndo(); }, {passive: false});
+            document.getElementById('newGameBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); resetToNewGame(); checkGameState(); }, {passive: false});
+            document.getElementById('menuBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); showMainMenu(); }, {passive: false});
+        }
+
+        window.addEventListener('load', init);
+        console.log('Game fully loaded and ready!');
+    </script>
+</body>
+</html>

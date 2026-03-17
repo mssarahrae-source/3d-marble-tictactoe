@@ -1,0 +1,9 @@
+# Build artifacts
+lib/node_modules/
+lib/package.json
+lib/package-lock.json
+
+# Dev files
+*.bak
+*.bak*
+debug.html
