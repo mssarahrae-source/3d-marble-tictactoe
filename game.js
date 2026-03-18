@@ -227,13 +227,38 @@ function playTone(freq, duration = 0.15) {
     } catch(e) {}
 }
 
+
+function playWinFanfare() {
+    if (!game.soundEnabled || !game.audioCtx) return;
+    const notes = [
+        { freq: 523, start: 0.00, dur: 0.18 },
+        { freq: 659, start: 0.16, dur: 0.18 },
+        { freq: 784, start: 0.32, dur: 0.50 }
+    ];
+    try {
+        const now = game.audioCtx.currentTime;
+        notes.forEach(({ freq, start, dur }) => {
+            const osc  = game.audioCtx.createOscillator();
+            const gain = game.audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(game.audioCtx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0, now + start);
+            gain.gain.linearRampToValueAtTime(0.35, now + start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + start + dur);
+            osc.start(now + start);
+            osc.stop(now + start + dur + 0.05);
+        });
+    } catch(e) {}
+}
 function initBoard() {
     game.board = Array.from({length:3}, () => Array.from({length:3}, () => [0,0,0]));
     game.moves = []; game.currentPlayer = 1; game.state = 'playing';
 }
 
 function getPlayerColor(player) {
-    const sets = { redblue: [0xff3333, 0x3366ff], bw: [0x222222, 0xdddddd] };
+    const sets = { redblue: [0xff3333, 0x3366ff], bw: [0x222222, 0xdddddd], purpleteal: [0x9933ff, 0x00ccbb], orangewhite: [0xff6600, 0xffffff], greenyellow: [0x33cc33, 0xffdd00] };
     return sets[game.colorset][player - 1];
 }
 
@@ -296,12 +321,12 @@ function checkGameState() {
     if (checkWin(game.board, 1)) {
         game.state = 'win'; game.scores.p1++;
         document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 1 Wins! &#127881;</div>';
-        playTone(659, 0.4); updateScores(); saveSettings(); highlightWinner(1); return true;
+        playWinFanfare(); updateScores(); saveSettings(); highlightWinner(1); return true;
     }
     if (checkWin(game.board, 2)) {
         game.state = 'win'; game.scores.p2++;
         document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 2 Wins! &#127881;</div>';
-        playTone(659, 0.4); updateScores(); saveSettings(); highlightWinner(2); return true;
+        playWinFanfare(); updateScores(); saveSettings(); highlightWinner(2); return true;
     }
     if (isFull(game.board)) {
         game.state = 'draw';
@@ -404,6 +429,7 @@ function startNewGame() {
     game.soundEnabled = document.getElementById('soundToggle').checked;
     saveSettings();
     document.getElementById('menu').style.display    = 'none';
+    if (window.innerWidth < 768) togglePanel('collapse');
     document.getElementById('gameui').style.display  = 'block';
     document.getElementById('legend').style.display  = 'block';
     game.layerLabels.forEach(l => l.el.style.display = 'block');
@@ -471,7 +497,15 @@ function saveSettings() {
 
 function updateTurnDisplay() {
     const p  = game.currentPlayer;
-    const cn = (game.colorset === 'redblue') ? (p === 1 ? 'Red' : 'Blue') : (p === 1 ? 'Black' : 'White');
+    const colorNames = {
+        redblue:     ['Red',    'Blue'],
+        bw:          ['Black',  'White'],
+        purpleteal:  ['Purple', 'Teal'],
+        orangewhite: ['Orange', 'White'],
+        greenyellow: ['Green',  'Yellow']
+    };
+    const names = colorNames[game.colorset] || ['P1', 'P2'];
+    const cn = names[p - 1];
     document.getElementById('turn').textContent = `Player ${p}'s Turn (${cn})`;
 }
 
@@ -522,6 +556,20 @@ function onPointerDown(e) {
     }
 }
 
+
+function togglePanel(forceState) {
+    const panel = document.getElementById('gameui');
+    const btn   = document.getElementById('togglePanelBtn');
+    if (forceState === 'collapse' || (forceState === undefined && !panel.classList.contains('collapsed'))) {
+        panel.classList.add('collapsed');
+        btn.innerHTML = '&#9660;'; // down arrow = expand
+        btn.title = 'Expand panel';
+    } else {
+        panel.classList.remove('collapsed');
+        btn.innerHTML = '&#9650;'; // up arrow = collapse
+        btn.title = 'Collapse panel';
+    }
+}
 function setupEventListeners() {
     window.addEventListener('resize', () => {
         game.camera.aspect = window.innerWidth / window.innerHeight;
@@ -533,6 +581,7 @@ function setupEventListeners() {
     document.getElementById('modeSel').addEventListener('change', e => {
         document.getElementById('aiLevelDiv').style.display = e.target.value === 'ai' ? 'block' : 'none';
     });
+    document.getElementById('togglePanelBtn').addEventListener('click', e => { e.preventDefault(); togglePanel(); });
     document.getElementById('startBtn').addEventListener('click',   e => { e.preventDefault(); startNewGame(); });
     document.getElementById('undoBtn').addEventListener('click',    e => { e.preventDefault(); performUndo(); });
     document.getElementById('newGameBtn').addEventListener('click', e => { e.preventDefault(); resetToNewGame(); });
