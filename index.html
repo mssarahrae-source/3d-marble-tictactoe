@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>3D Marble Tic-Tac-Toe</title>
     <style>
         * { box-sizing: border-box; }
@@ -13,12 +13,12 @@
         #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
         #gameui { position: absolute; top: 20px; left: 20px; min-width: 200px; }
         #panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; }
-        #panel-title { font-weight: bold; font-size: 0.95em; opacity: 0.85; }
-        #togglePanelBtn { width: auto !important; padding: 2px 10px !important; font-size: 13px !important; background: rgba(255,255,255,0.12) !important; margin: 0 !important; line-height: 1.4; }
-        #panel-content { overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 400px; opacity: 1; }
+        #panel-title { font-weight: bold; font-size: 0.95em; opacity: 0.85; flex:1; }
+        .icon-btn { width: auto !important; padding: 2px 9px !important; font-size: 13px !important; background: rgba(255,255,255,0.12) !important; margin: 0 0 0 4px !important; line-height: 1.4; }
+        #panel-content { overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 500px; opacity: 1; }
         #gameui.collapsed #panel-content { max-height: 0; opacity: 0; pointer-events: none; }
-        h1 { margin: 0 0 20px; font-size: 1.8em; }
-        label { display: block; margin: 10px 0; font-weight: bold; }
+        h1 { margin: 0 0 16px; font-size: 1.8em; }
+        label { display: block; margin: 8px 0; font-weight: bold; }
         select, button { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; font-size: 16px; background: rgba(255,255,255,0.1); color: white; cursor: pointer; }
         select option { background: #1a1a2e; color: #ffffff; }
         button { background: #4a90e2; font-weight: bold; transition: background 0.2s; }
@@ -30,8 +30,38 @@
         .layer-label { position: fixed; z-index: 150; pointer-events: none; font-size: 12px; font-weight: bold; padding: 3px 9px; border-radius: 4px; background: rgba(0,0,0,0.75); border-left: 3px solid; white-space: nowrap; }
         #legend { position: fixed; bottom: 20px; left: 20px; z-index: 150; pointer-events: none; font-size: 12px; display: none; }
         #legend div { margin: 3px 0; padding: 3px 8px; border-radius: 4px; background: rgba(0,0,0,0.6); border-left: 3px solid; }
+        /* How to Play overlay */
+        #htp-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,12,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+        #htp-overlay.visible { opacity: 1; pointer-events: auto; }
+        #htp-card { background: linear-gradient(145deg,#0d1b3e,#1a0d2e); border: 1px solid rgba(255,255,255,0.18); border-radius: 20px; padding: 30px 34px; max-width: 460px; width: 90%; position: relative; box-shadow: 0 0 60px rgba(80,120,255,0.3); }
+        .htp-step { display: none; }
+        .htp-step.active { display: block; }
+        .htp-icon { font-size: 2.8em; margin-bottom: 10px; }
+        .htp-step h2 { font-size: 1.25em; margin-bottom: 8px; color: #adf; }
+        .htp-step p { font-size: 0.93em; line-height: 1.65; color: #ccc; margin-bottom: 8px; }
+        .htp-step ul { padding-left: 18px; color: #ccc; font-size: 0.91em; line-height: 1.8; }
+        .htp-dots { display: flex; gap: 8px; justify-content: center; margin: 16px 0 14px; }
+        .htp-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: background 0.3s; cursor: pointer; }
+        .htp-dot.active { background: #6af; }
+        .htp-nav { display: flex; gap: 10px; justify-content: flex-end; }
+        .htp-nav button { width: auto; padding: 9px 20px; font-size: 14px; margin: 0; }
+        #htp-prev { background: rgba(255,255,255,0.1) !important; }
+        #htp-next { background: #3a7bd5 !important; }
+        #htp-close { position: absolute; top: 12px; right: 14px; background: transparent !important; border: none; color: rgba(255,255,255,0.4); font-size: 20px; cursor: pointer; width: auto !important; padding: 4px 8px !important; margin: 0 !important; }
+        #htp-close:hover { color: #fff; }
+        /* Touch gesture hints */
+        #touch-hints { position: fixed; inset: 0; z-index: 490; background: rgba(0,0,0,0.78); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+        #touch-hints.visible { opacity: 1; pointer-events: auto; }
+        #touch-hints h3 { font-size: 1.1em; color: #adf; margin: 0; }
+        .th-cards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 380px; }
+        .th-card { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 16px; text-align: center; min-width: 90px; }
+        .th-icon { font-size: 2em; margin-bottom: 5px; }
+        .th-label { font-size: 11px; color: #bbb; line-height: 1.4; }
+        .th-label strong { display: block; color: #fff; font-size: 12px; margin-bottom: 2px; }
+        #touch-dismiss { background: rgba(255,255,255,0.15) !important; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 10px 28px; border-radius: 10px; font-size: 14px; cursor: pointer; width: auto !important; margin-top: 4px !important; }
+        #helpBtnMenu { background: rgba(255,255,255,0.1); margin-top: 6px; }
         @media (max-width: 768px) {
-            #gameui { top: 10px; left: 10px; right: 10px; padding: 20px; }
+            #gameui { top: 10px; left: 10px; right: 10px; padding: 18px; }
             button, select { padding: 10px; font-size: 14px; }
             h1 { font-size: 1.4em; }
         }
@@ -43,6 +73,13 @@
     <div id="ui">
         <div id="menu" style="display:none;">
             <h1>&#127744; 3D Marble Tic-Tac-Toe</h1>
+            <div>
+                <label>Board Mode:</label>
+                <select id="boardModeSel">
+                    <option value="3">3x3x3 Classic (3 in a row)</option>
+                    <option value="4">4x4x4 Qubic (4 in a row)</option>
+                </select>
+            </div>
             <div>
                 <label>Mode:</label>
                 <select id="modeSel">
@@ -68,15 +105,17 @@
                     <option value="hard">Hard</option>
                 </select>
             </div>
-            <label style="margin-top:15px;">
+            <label style="margin-top:14px;">
                 <input type="checkbox" id="soundToggle" checked> Sound Effects
             </label>
-            <button id="startBtn" style="margin-top:20px;">&#128640; Start Game</button>
+            <button id="startBtn" style="margin-top:18px;">&#128640; Start Game</button>
+            <button id="helpBtnMenu">&#9432; How to Play</button>
         </div>
         <div id="gameui" style="display:none;">
             <div id="panel-header">
                 <span id="panel-title">&#127744; 3D Marble TTT</span>
-                <button id="togglePanelBtn" title="Collapse/Expand panel">&#9650;</button>
+                <button id="helpBtn" class="icon-btn" title="How to Play">&#9432;</button>
+                <button id="togglePanelBtn" class="icon-btn" title="Collapse/Expand panel">&#9650;</button>
             </div>
             <div id="panel-content">
                 <div id="turn">Player 1's Turn</div>
@@ -88,12 +127,86 @@
             </div>
         </div>
     </div>
-    <div id="legend">
-        <div style="color:#f0a040; border-color:#f0a040;">&#9632; Bottom Level</div>
-        <div style="color:#4090f0; border-color:#4090f0;">&#9632; Middle Level</div>
-        <div style="color:#40e080; border-color:#40e080;">&#9632; Top Level</div>
+    <!-- How to Play Overlay -->
+    <div id="htp-overlay">
+      <div id="htp-card">
+        <button id="htp-close">&#10005;</button>
+        <div class="htp-step active" id="htp-0">
+          <div class="htp-icon">&#127918;</div>
+          <h2>Welcome to 3D Marble Tic-Tac-Toe!</h2>
+          <p>A 3D twist on the classic game. You play on a <strong>multi-level shelf</strong> with positions stacked vertically.</p>
+          <p>Get your marbles <strong>in a row</strong> horizontally, vertically, diagonally, or through multiple levels!</p>
+        </div>
+        <div class="htp-step" id="htp-1">
+          <div class="htp-icon">&#127981;</div>
+          <h2>Two Board Modes</h2>
+          <ul>
+            <li><strong>3x3x3 Classic</strong> &mdash; 3 levels, 27 cells, get <strong>3 in a row</strong> (49 winning lines)</li>
+            <li><strong>4x4x4 Qubic</strong> &mdash; 4 levels, 64 cells, get <strong>4 in a row</strong> (76 winning lines). Far more strategic!</li>
+          </ul>
+          <p style="margin-top:10px;color:#ffd700;">Select your mode from the menu before starting.</p>
+        </div>
+        <div class="htp-step" id="htp-2">
+          <div class="htp-icon">&#128074;</div>
+          <h2>Placing Your Marble</h2>
+          <p>Hover over the board to see a <strong>ghost marble</strong> preview showing where it will land.</p>
+          <p><strong>Click</strong> (or tap on mobile) to place your marble. Players alternate turns.</p>
+        </div>
+        <div class="htp-step" id="htp-3">
+          <div class="htp-icon">&#127760;</div>
+          <h2>Rotating the Board</h2>
+          <ul>
+            <li><strong>Mouse:</strong> click + drag to rotate &bull; scroll to zoom</li>
+            <li><strong>Touch:</strong> 1 finger drag to rotate &bull; 2 finger pinch to zoom &bull; 2 finger drag to pan</li>
+          </ul>
+          <p>Rotate often &mdash; winning lines through multiple levels are easy to miss!</p>
+        </div>
+        <div class="htp-step" id="htp-4">
+          <div class="htp-icon">&#127942;</div>
+          <h2>Winning</h2>
+          <p>Get your marbles in a straight line &mdash; rows, columns, or diagonals on the same level, <em>or</em> lines that pass through multiple levels.</p>
+          <p>When you win, the board celebrates with fireworks! Click or press any key to continue.</p>
+        </div>
+        <div class="htp-step" id="htp-5">
+          <div class="htp-icon">&#129302;</div>
+          <h2>Playing Against the AI</h2>
+          <p>Select <strong>Human vs AI</strong> from the menu. Three difficulty levels:</p>
+          <ul>
+            <li><strong>Easy</strong> &mdash; makes occasional mistakes, great for beginners</li>
+            <li><strong>Medium</strong> &mdash; solid strategic play, beatable</li>
+            <li><strong>Hard</strong> &mdash; thinks several moves ahead, very tough!</li>
+          </ul>
+        </div>
+        <div class="htp-step" id="htp-6">
+          <div class="htp-icon">&#128161;</div>
+          <h2>Tips &amp; Tricks</h2>
+          <ul>
+            <li>The <strong>center positions</strong> control the most winning lines</li>
+            <li>Watch for threats passing <strong>through multiple levels</strong></li>
+            <li>Use <strong>Undo</strong> to take back a move during play</li>
+            <li>Rotate the board regularly to spot hidden opportunities</li>
+          </ul>
+        </div>
+        <div class="htp-dots" id="htp-dots"></div>
+        <div class="htp-nav">
+          <button id="htp-prev">&#8592; Back</button>
+          <button id="htp-next">Next &#8594;</button>
+        </div>
+      </div>
     </div>
-    <script src="./three-bundle.js?v=1.2"></script>
-    <script src="./game.js?v=1.2"></script>
+    <!-- Touch Gesture Hints -->
+    <div id="touch-hints">
+      <h3>&#128241; Touch Controls</h3>
+      <div class="th-cards">
+        <div class="th-card"><div class="th-icon">&#128400;</div><div class="th-label"><strong>1 Finger Drag</strong>Rotate board</div></div>
+        <div class="th-card"><div class="th-icon">&#129351;</div><div class="th-label"><strong>2 Finger Pinch</strong>Zoom in/out</div></div>
+        <div class="th-card"><div class="th-icon">&#9757;</div><div class="th-label"><strong>Tap Cell</strong>Place marble</div></div>
+        <div class="th-card"><div class="th-icon">&#128400;</div><div class="th-label"><strong>2 Finger Drag</strong>Pan view</div></div>
+      </div>
+      <button id="touch-dismiss">Got it!</button>
+    </div>
+    <div id="legend"></div>
+    <script src="./three-bundle.js?v=1.3"></script>
+    <script src="./game.js?v=1.3"></script>
 </body>
 </html>
