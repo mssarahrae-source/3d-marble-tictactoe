@@ -27,6 +27,7 @@ const game = {
     mouse: new THREE.Vector2(),
     audioCtx: null, soundEnabled: true,
     ghostMarble: null,
+    fireworks: [], celebration: null, winLine: null,
     layerLabels: [],
     emptyCellDots: []
 };
@@ -228,29 +229,194 @@ function playTone(freq, duration = 0.15) {
 }
 
 
-function playWinFanfare() {
+
+
+function findWinLine(board, player) {
+    const lines = [];
+    for (let y=0;y<3;y++) for (let z=0;z<3;z++) lines.push([[0,y,z],[1,y,z],[2,y,z]]);
+    for (let x=0;x<3;x++) for (let z=0;z<3;z++) lines.push([[x,0,z],[x,1,z],[x,2,z]]);
+    for (let x=0;x<3;x++) for (let y=0;y<3;y++) lines.push([[x,y,0],[x,y,1],[x,y,2]]);
+    for (let z=0;z<3;z++) {
+        lines.push([[0,0,z],[1,1,z],[2,2,z]]);
+        lines.push([[2,0,z],[1,1,z],[0,2,z]]);
+    }
+    for (let y=0;y<3;y++) {
+        lines.push([[0,y,0],[1,y,1],[2,y,2]]);
+        lines.push([[2,y,0],[1,y,1],[0,y,2]]);
+    }
+    for (let x=0;x<3;x++) {
+        lines.push([[x,0,0],[x,1,1],[x,2,2]]);
+        lines.push([[x,2,0],[x,1,1],[x,0,2]]);
+    }
+    lines.push([[0,0,0],[1,1,1],[2,2,2]]);
+    lines.push([[2,0,0],[1,1,1],[0,2,2]]);
+    lines.push([[0,2,0],[1,1,1],[2,0,2]]);
+    lines.push([[0,0,2],[1,1,1],[2,2,0]]);
+    for (const line of lines) {
+        if (line.every(([x,y,z]) => board[x][y][z] === player))
+            return line.map(([x,y,z]) => ({x, y, z}));
+    }
+    return null;
+}
+
+const FW_COLORS = [0xff4444, 0x44aaff, 0xffdd00, 0xff88ff, 0x44ffcc, 0xff8800, 0xffffff, 0xff44aa];
+
+function playFireworkBurst() {
     if (!game.soundEnabled || !game.audioCtx) return;
-    const notes = [
-        { freq: 523, start: 0.00, dur: 0.18 },
-        { freq: 659, start: 0.16, dur: 0.18 },
-        { freq: 784, start: 0.32, dur: 0.50 }
-    ];
     try {
-        const now = game.audioCtx.currentTime;
-        notes.forEach(({ freq, start, dur }) => {
-            const osc  = game.audioCtx.createOscillator();
-            const gain = game.audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(game.audioCtx.destination);
-            osc.frequency.value = freq;
-            osc.type = 'sine';
-            gain.gain.setValueAtTime(0, now + start);
-            gain.gain.linearRampToValueAtTime(0.35, now + start + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + start + dur);
-            osc.start(now + start);
-            osc.stop(now + start + dur + 0.05);
-        });
+        const now   = game.audioCtx.currentTime;
+        const pitch = 280 + Math.random() * 380;
+        const osc   = game.audioCtx.createOscillator();
+        const g1    = game.audioCtx.createGain();
+        osc.connect(g1); g1.connect(game.audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(pitch * 4.2, now + 0.30);
+        g1.gain.setValueAtTime(0.14, now);
+        g1.gain.exponentialRampToValueAtTime(0.01, now + 0.34);
+        osc.start(now); osc.stop(now + 0.36);
+        const bufLen = Math.floor(game.audioCtx.sampleRate * 0.55);
+        const buf    = game.audioCtx.createBuffer(1, bufLen, game.audioCtx.sampleRate);
+        const data   = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+        const noise = game.audioCtx.createBufferSource();
+        noise.buffer = buf;
+        const g2 = game.audioCtx.createGain();
+        noise.connect(g2); g2.connect(game.audioCtx.destination);
+        g2.gain.setValueAtTime(0, now + 0.27);
+        g2.gain.linearRampToValueAtTime(0.40, now + 0.34);
+        g2.gain.exponentialRampToValueAtTime(0.01, now + 0.92);
+        noise.start(now + 0.27); noise.stop(now + 0.96);
     } catch(e) {}
+}
+
+function launchFirework() {
+    const col = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+    const bx  = (Math.random() - 0.5) * 16;
+    const by  = 1.0 + Math.random() * 8;
+    const bz  = -2 - Math.random() * 10;
+    const N   = 90;
+    const positions  = new Float32Array(N * 3);
+    const colors     = new Float32Array(N * 3);
+    const velocities = [];
+    const c = new THREE.Color(col);
+    for (let i = 0; i < N; i++) {
+        positions[i*3] = bx; positions[i*3+1] = by; positions[i*3+2] = bz;
+        colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+        const theta = Math.random() * Math.PI * 2;
+        const phi   = Math.acos(2 * Math.random() - 1);
+        const spd   = 2.0 + Math.random() * 3.8;
+        velocities.push({
+            x: Math.sin(phi) * Math.cos(theta) * spd,
+            y: Math.sin(phi) * Math.sin(theta) * spd,
+            z: Math.cos(phi) * spd
+        });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+    const mat = new THREE.PointsMaterial({
+        size: 0.22, vertexColors: true,
+        transparent: true, opacity: 1.0,
+        depthTest: false, depthWrite: false,
+        sizeAttenuation: true
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.renderOrder = 999;
+    game.scene.add(pts);
+    playFireworkBurst();
+    game.fireworks.push({ pts, geo, mat, velocities, N, life: 1.0 });
+}
+
+function updateFireworks(dt) {
+    const gravity = -2.4;
+    game.fireworks = game.fireworks.filter(fw => {
+        fw.life -= dt * 0.62;
+        if (fw.life <= 0) {
+            game.scene.remove(fw.pts);
+            fw.geo.dispose(); fw.mat.dispose();
+            return false;
+        }
+        const pos = fw.geo.attributes.position.array;
+        for (let i = 0; i < fw.N; i++) {
+            fw.velocities[i].y += gravity * dt;
+            pos[i*3]   += fw.velocities[i].x * dt;
+            pos[i*3+1] += fw.velocities[i].y * dt;
+            pos[i*3+2] += fw.velocities[i].z * dt;
+        }
+        fw.geo.attributes.position.needsUpdate = true;
+        fw.mat.opacity = Math.max(0, fw.life);
+        return true;
+    });
+}
+
+function startCelebration(winLine) {
+    game.winLine  = winLine;
+    const cx = game.camera.position.x;
+    const cz = game.camera.position.z;
+    game.celebration = {
+        active:       true,
+        time:         0,
+        lastFirework: -1,
+        marbleIdx:    0,
+        marbleTime:   0,
+        camAngle:     Math.atan2(cx, cz),
+        camRadius:    Math.sqrt(cx * cx + cz * cz),
+        camHeight:    game.camera.position.y
+    };
+    game.controls.enabled = false;
+    game.marbles.forEach(m => {
+        const isWin = winLine ? winLine.some(p => p.x===m.pos.x && p.y===m.pos.y && p.z===m.pos.z) : false;
+        m.mesh.material.emissiveIntensity = isWin ? 1.0 : 0.04;
+        m.isWinner = isWin;
+    });
+    function endOnInput() {
+        if (!game.celebration || !game.celebration.active) return;
+        window.removeEventListener('pointerdown', endOnInput);
+        window.removeEventListener('keydown',     endOnInput);
+        stopCelebration();
+    }
+    setTimeout(() => {
+        window.addEventListener('pointerdown', endOnInput);
+        window.addEventListener('keydown',     endOnInput);
+    }, 700);
+}
+
+function stopCelebration() {
+    if (!game.celebration) return;
+    game.celebration.active = false;
+    game.fireworks.forEach(fw => { game.scene.remove(fw.pts); fw.geo.dispose(); fw.mat.dispose(); });
+    game.fireworks = [];
+    game.marbles.forEach(m => {
+        if (m.isWinner) {
+            m.mesh.material.emissive.setHex(m.mesh.material.color.getHex());
+            m.mesh.material.emissiveIntensity = 2.2;
+        } else {
+            m.mesh.material.emissiveIntensity = 0.05;
+        }
+    });
+    game.controls.enabled = true;
+    const toPos  = new THREE.Vector3(7, 8, 7);
+    const toLook = new THREE.Vector3(0, 0, 0);
+    const fPos   = game.camera.position.clone();
+    const fLook  = game.controls.target.clone();
+    let tw = 0;
+    function tween() {
+        if (tw >= 1) {
+            game.camera.position.copy(toPos);
+            game.controls.target.copy(toLook);
+            game.controls.update();
+            game.state = 'win';
+            return;
+        }
+        tw = Math.min(1, tw + 0.025);
+        const e = 1 - Math.pow(1 - tw, 3);
+        game.camera.position.lerpVectors(fPos, toPos, e);
+        game.controls.target.lerpVectors(fLook, toLook, e);
+        game.controls.update();
+        requestAnimationFrame(tween);
+    }
+    tween();
 }
 function initBoard() {
     game.board = Array.from({length:3}, () => Array.from({length:3}, () => [0,0,0]));
@@ -321,12 +487,12 @@ function checkGameState() {
     if (checkWin(game.board, 1)) {
         game.state = 'win'; game.scores.p1++;
         document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 1 Wins! &#127881;</div>';
-        playWinFanfare(); updateScores(); saveSettings(); highlightWinner(1); return true;
+        updateScores(); saveSettings(); startCelebration(findWinLine(game.board, 1)); return true;
     }
     if (checkWin(game.board, 2)) {
         game.state = 'win'; game.scores.p2++;
         document.getElementById('gameStatus').innerHTML = '<div style="color:#ffd700;">Player 2 Wins! &#127881;</div>';
-        playWinFanfare(); updateScores(); saveSettings(); highlightWinner(2); return true;
+        updateScores(); saveSettings(); startCelebration(findWinLine(game.board, 2)); return true;
     }
     if (isFull(game.board)) {
         game.state = 'draw';
@@ -454,6 +620,12 @@ function performUndo() {
 function resetToNewGame() {
     game.marbles.forEach(m => game.scene.remove(m.mesh));
     game.marbles = [];
+    if (game.celebration) {
+        game.celebration.active = false;
+        game.fireworks.forEach(fw => { game.scene.remove(fw.pts); fw.geo.dispose(); fw.mat.dispose(); });
+        game.fireworks = []; game.celebration = null;
+    }
+    game.controls.enabled = true;
     game.emptyCellDots.forEach(d => d.visible = true);
     initBoard();
     updateGhostColor();
@@ -600,12 +772,46 @@ function animate() {
             marble.mesh.position.y = marble.visualY + (1 - ease) * UNIT_Y * 0.45;
         }
         marble.mesh.rotation.y += 0.007;
-        if (game.state === 'win') {
-            marble.mesh.material.emissiveIntensity = 2 + Math.sin(t * 0.005) * 1.2;
+        if (game.state === 'win' && (!game.celebration || !game.celebration.active) && marble.isWinner) {
+            marble.mesh.material.emissiveIntensity = 2 + Math.sin(t * 0.003) * 0.6;
         }
     });
     if (game.ghostMarble && game.ghostMarble.visible) {
         game.ghostMarble.material.opacity = 0.28 + Math.sin(t * 0.006) * 0.1;
+    }
+
+    // Celebration: camera spin + fireworks + marble cycling
+    if (game.celebration && game.celebration.active) {
+        const cel    = game.celebration;
+        cel.time    += 0.016;
+        cel.camAngle += 0.022;
+        const hWobble = Math.sin(cel.time * 0.55) * 2.0;
+        game.camera.position.set(
+            Math.sin(cel.camAngle) * cel.camRadius,
+            cel.camHeight + hWobble,
+            Math.cos(cel.camAngle) * cel.camRadius
+        );
+        game.camera.lookAt(0, 0, 0);
+        if (cel.time - cel.lastFirework > 0.60 + Math.random() * 0.55) {
+            cel.lastFirework = cel.time;
+            if (game.fireworks.length < 10) launchFirework();
+        }
+        cel.marbleTime += 0.016;
+        if (cel.marbleTime > 0.44) {
+            cel.marbleTime = 0;
+            cel.marbleIdx  = (cel.marbleIdx + 1) % 3;
+        }
+        if (game.winLine) {
+            game.marbles.forEach(m => {
+                if (m.isWinner) {
+                    const wi = game.winLine.findIndex(p => p.x===m.pos.x && p.y===m.pos.y && p.z===m.pos.z);
+                    m.mesh.material.emissiveIntensity = wi === cel.marbleIdx
+                        ? (3.5 + Math.sin(cel.time * 14) * 1.5)
+                        : 0.2;
+                }
+            });
+        }
+        updateFireworks(0.016);
     }
     updateLayerLabelPositions();
     game.renderer.render(game.scene, game.camera);
